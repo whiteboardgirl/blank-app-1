@@ -1,5 +1,3 @@
-pip install streamlit SPARQLWrapper pandas matplotlib networkx scikit-learn plotly folium streamlit-folium
-
 import streamlit as st
 import pandas as pd
 from SPARQLWrapper import SPARQLWrapper, JSON
