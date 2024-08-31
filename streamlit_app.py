@@ -1,130 +1,197 @@
 import streamlit as st
-import pandas as pd
-from SPARQLWrapper import SPARQLWrapper, JSON
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.decomposition import LatentDirichletAllocation
-import matplotlib.pyplot as plt
-import networkx as nx
-import plotly.express as px
-import folium
-from streamlit_folium import st_folium
-import nltk
-from nltk.stem import WordNetLemmatizer
-from nltk.corpus import stopwords
+from docx import Document
+from fpdf import FPDF
+import pypandoc
+import re
+import os
+from streamlit_quill import st_quill
 
-# Download NLTK data
-nltk.download('stopwords')
-nltk.download('wordnet')
+def main():
+    st.title("Premier Instruction Manual Viewer and Editor")
 
-# Initialize the lemmatizer and stopwords
-lemmatizer = WordNetLemmatizer()
-stop_words = set(stopwords.words('english'))
+    st.sidebar.title("Navigation")
+    section = st.sidebar.selectbox("Select Section", [
+        "Introduction", 
+        "Upload and View Manual", 
+        "Rich Text Editor", 
+        "Search Manual", 
+        "Export Manual"
+    ])
 
-# Initialize SPARQL function
-def query_wikidata(sparql_query):
-    sparql = SPARQLWrapper("https://query.wikidata.org/sparql")
-    sparql.setQuery(sparql_query)
-    sparql.setReturnFormat(JSON)
-    results = sparql.query().convert()
+    if section == "Introduction":
+        show_introduction()
+    elif section == "Upload and View Manual":
+        upload_and_view_manual()
+    elif section == "Rich Text Editor":
+        rich_text_editor()
+    elif section == "Search Manual":
+        search_manual()
+    elif section == "Export Manual":
+        export_manual()
+
+def show_introduction():
+    st.header("Introduction")
+    st.write("""
+    Welcome to the Premier Instruction Manual Viewer and Editor. 
+    You can upload manuals in various formats, edit them, navigate through sections, search for specific terms, and export the content to different formats such as PDF or DOCX.
+    """)
+
+def upload_and_view_manual():
+    st.header("Upload and View Manual")
+    uploaded_file = st.file_uploader("Choose a file", type=["docx", "txt", "pdf", "rtf"])
+
+    if uploaded_file is not None:
+        file_extension = os.path.splitext(uploaded_file.name)[1].lower()
+
+        if file_extension == '.txt':
+            content = uploaded_file.read().decode("utf-8")
+        elif file_extension == '.docx':
+            content = read_docx(uploaded_file)
+        elif file_extension == '.pdf':
+            content = read_pdf(uploaded_file)
+        elif file_extension == '.rtf':
+            content = read_rtf(uploaded_file)
+        else:
+            st.error("Unsupported file format.")
+            return
+
+        st.session_state['manual_content'] = content
+        sections = parse_sections(content)
+        if sections:
+            selected_section = st.sidebar.radio("Jump to Section", list(sections.keys()))
+            st.subheader(selected_section)
+            st.write(sections[selected_section])
+
+def read_docx(uploaded_file):
+    """Reads a .docx file and returns its content as plain text."""
+    doc = Document(uploaded_file)
+    full_text = []
+    for paragraph in doc.paragraphs:
+        full_text.append(paragraph.text)
+    return '\n'.join(full_text)
+
+def read_pdf(uploaded_file):
+    """Reads a .pdf file and returns its content as plain text."""
+    reader = PdfReader(uploaded_file)
+    full_text = []
+    for page in reader.pages:
+        full_text.append(page.extract_text())
+    return '\n'.join(full_text)
+
+def read_rtf(uploaded_file):
+    """Reads a .rtf file and returns its content as plain text."""
+    output = pypandoc.convert_file(uploaded_file.name, 'plain', format='rtf')
+    return output
+
+def parse_sections(content):
+    """Parses the content into sections based on headings."""
+    sections = {}
+    lines = content.splitlines()
+    current_section = None
+    section_text = []
+
+    for line in lines:
+        if is_heading(line):
+            if current_section:
+                sections[current_section] = '\n'.join(section_text)
+                section_text = []
+            current_section = line.strip()
+        else:
+            section_text.append(line)
+
+    if current_section:
+        sections[current_section] = '\n'.join(section_text)
     
-    # Parse the results into a pandas DataFrame
-    data = []
-    for result in results["results"]["bindings"]:
-        row = {}
-        for key in result:
-            row[key] = result[key]['value']
-        data.append(row)
+    return sections
+
+def is_heading(line):
+    """Determines if a line is a heading."""
+    return re.match(r'(Chapter|Section)\s+\d+', line, re.IGNORECASE) or len(line.split()) < 5
+
+def rich_text_editor():
+    st.header("Rich Text Editor")
     
-    return pd.DataFrame(data)
+    if 'manual_content' not in st.session_state:
+        st.error("Please upload and view a manual first.")
+        return
+    
+    editor_content = st_quill(value=st.session_state['manual_content'], theme="snow")
+    if st.button("Save Changes"):
+        st.session_state['manual_content'] = editor_content
+        st.success("Changes saved.")
 
-# Function to preprocess text and extract a meaningful keyword
-def extract_meaning(text):
-    words = text.lower().split()
-    meaningful_words = [lemmatizer.lemmatize(word) for word in words if word not in stop_words]
-    return meaningful_words[0] if meaningful_words else words[0]
+def search_manual():
+    st.header("Search Manual")
+    
+    if 'manual_content' not in st.session_state:
+        st.error("Please upload and view a manual first.")
+        return
+    
+    search_term = st.text_input("Search for a term or phrase:")
+    if search_term:
+        search_results = search_sections(st.session_state['manual_content'], search_term)
+        if search_results:
+            for section, content in search_results.items():
+                st.subheader(section)
+                st.write(content, unsafe_allow_html=True)
+        else:
+            st.write("No results found.")
 
-# Streamlit App
-st.title("Aby Warburg-inspired Cultural Symbol Analysis Tool")
+def search_sections(content, search_term):
+    """Searches for a term within sections and returns a dictionary of matched sections with highlighted terms."""
+    sections = parse_sections(content)
+    search_results = {}
+    for section, content in sections.items():
+        if search_term.lower() in content.lower():
+            highlighted_content = highlight_term(content, search_term)
+            search_results[section] = highlighted_content
+    return search_results
 
-# Step 1: User inputs a SPARQL query or chooses a predefined one
-st.sidebar.header("Data Querying")
-sparql_query = st.text_area("Enter your SPARQL query", height=200, value="""
-SELECT ?countryLabel ?capitalLabel
-WHERE {
-  ?country wdt:P31 wd:Q6256.
-  ?country wdt:P36 ?capital.
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en". }
-}
-LIMIT 10
-""")
+def highlight_term(content, term):
+    """Highlights all occurrences of the search term in the content."""
+    highlighted = re.sub(f"({re.escape(term)})", r'<mark>\1</mark>', content, flags=re.IGNORECASE)
+    return highlighted
 
-if st.sidebar.button("Fetch Data"):
-    try:
-        # Fetch data from Wikidata
-        df = query_wikidata(sparql_query)
-        df['Meaning'] = df['countryLabel'].apply(extract_meaning)
-        st.write("Query Results with Meanings:")
-        st.dataframe(df)
-        
-        # Download the data as a CSV
-        csv = df.to_csv(index=False)
-        st.download_button("Download CSV", csv, "wikidata_results.csv", "text/csv")
+def export_manual():
+    st.header("Export Manual")
+    
+    if 'manual_content' not in st.session_state:
+        st.error("Please upload and edit a manual first.")
+        return
+    
+    export_format = st.radio("Select export format:", ("DOCX", "PDF"))
+    
+    if export_format == "DOCX":
+        export_as_docx(st.session_state['manual_content'])
+    elif export_format == "PDF":
+        export_as_pdf(st.session_state['manual_content'])
 
-        # Proceed with Analysis and Visualization
-        st.sidebar.header("Analysis Parameters")
-        n_topics = st.sidebar.slider("Number of Topics for LDA", min_value=2, max_value=10, value=5)
-        ngram_range = st.sidebar.slider("N-gram Range (1-3)", min_value=1, max_value=3, value=(1, 3))
+def export_as_docx(content):
+    """Exports the content as a DOCX file."""
+    doc = Document()
+    for line in content.splitlines():
+        doc.add_paragraph(line)
+    
+    doc_file = "exported_manual.docx"
+    doc.save(doc_file)
+    
+    with open(doc_file, "rb") as f:
+        st.download_button("Download DOCX", f, file_name=doc_file, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
-        if st.sidebar.button("Run Analysis"):
-            processed_texts = df['Meaning'].apply(lambda x: ' '.join([lemmatizer.lemmatize(word) for word in x.split() if word not in stop_words]))
-            vectorizer = CountVectorizer(stop_words='english', ngram_range=(ngram_range[0], ngram_range[1]), max_features=1000)
-            term_matrix = vectorizer.fit_transform(processed_texts)
-            feature_names = vectorizer.get_feature_names_out()
+def export_as_pdf(content):
+    """Exports the content as a PDF file."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    for line in content.splitlines():
+        pdf.multi_cell(0, 10, line)
+    
+    pdf_file = "exported_manual.pdf"
+    pdf.output(pdf_file)
+    
+    with open(pdf_file, "rb") as f:
+        st.download_button("Download PDF", f, file_name=pdf_file, mime="application/pdf")
 
-            # LDA Topic Modeling
-            lda_model = LatentDirichletAllocation(n_components=n_topics, random_state=42)
-            lda_topics = lda_model.fit_transform(term_matrix)
-
-            # Visualization of Connections
-            def visualize_connections():
-                G = nx.Graph()
-                for idx, topic in enumerate(lda_model.components_):
-                    for i in topic.argsort()[:-10 - 1:-1]:
-                        G.add_edge(f'Topic {idx+1}', feature_names[i])
-                plt.figure(figsize=(12, 8))
-                nx.draw(G, with_labels=True, node_color='lightblue', font_size=10, node_size=3000)
-                plt.title('Connections Between Topics and Symbols')
-                st.pyplot(plt)
-
-            st.subheader("Symbol Connections Visualization")
-            visualize_connections()
-
-            # Geolocation Analysis if applicable
-            if 'Latitude' in df.columns and 'Longitude' in df.columns:
-                st.subheader("Geolocation of Symbols")
-                st.map(df[['Latitude', 'Longitude']])
-
-                # Plotly Map
-                if st.sidebar.checkbox("Show Geolocation Map"):
-                    fig = px.scatter_geo(df, lat='Latitude', lon='Longitude',
-                                         hover_name='countryLabel', size_max=10)
-                    fig.update_layout(title='Geographic Distribution of Symbols')
-                    st.plotly_chart(fig)
-
-                # Region-specific analysis
-                if 'countryLabel' in df.columns:
-                    region_grouped = df.groupby('countryLabel').size().reset_index(name='Counts')
-                    fig = px.choropleth(region_grouped, locations='countryLabel', locationmode='country names',
-                                        color='Counts', hover_name='countryLabel', color_continuous_scale=px.colors.sequential.Plasma)
-                    fig.update_layout(title='Symbol Distribution by Region')
-                    st.plotly_chart(fig)
-
-                # Heatmap Visualization
-                st.subheader("Heatmap of Symbol Density")
-                m = folium.Map(location=[df['Latitude'].mean(), df['Longitude'].mean()], zoom_start=2)
-                heat_data = [[row['Latitude'], row['Longitude']] for index, row in df.iterrows() if not pd.isnull(row['Latitude']) and not pd.isnull(row['Longitude'])]
-                folium.plugins.HeatMap(heat_data).add_to(m)
-                st_folium(m, width=700)
-
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
+if __name__ == "__main__":
+    main()
