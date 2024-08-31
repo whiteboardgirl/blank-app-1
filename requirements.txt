@@ -5,4 +5,6 @@ Werkzeug==2.3.3
 gunicorn==21.0.1
 TextBlob==0.17.1
 nltk==3.8.1
-PyYAML==5.4.1
+# Uncomment the next line if PyYAML is required
+# PyYAML==5.4.1
+# Cython (if required for PyYAML)
