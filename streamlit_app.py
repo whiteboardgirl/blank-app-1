@@ -1,7 +1,7 @@
 import streamlit as st
 from docx import Document
 from fpdf import FPDF
-import pypandoc
+from PyPDF2 import PdfReader
 import re
 import os
 
@@ -37,7 +37,7 @@ def show_introduction():
 
 def upload_and_view_manual():
     st.header("Upload and View Manual")
-    uploaded_file = st.file_uploader("Choose a file", type=["docx", "txt", "pdf", "rtf"])
+    uploaded_file = st.file_uploader("Choose a file", type=["docx", "txt", "pdf"])
 
     if uploaded_file is not None:
         file_extension = os.path.splitext(uploaded_file.name)[1].lower()
@@ -48,8 +48,6 @@ def upload_and_view_manual():
             content = read_docx(uploaded_file)
         elif file_extension == '.pdf':
             content = read_pdf(uploaded_file)
-        elif file_extension == '.rtf':
-            content = read_rtf(uploaded_file)
         else:
             st.error("Unsupported file format.")
             return
@@ -76,11 +74,6 @@ def read_pdf(uploaded_file):
     for page in reader.pages:
         full_text.append(page.extract_text())
     return '\n'.join(full_text)
-
-def read_rtf(uploaded_file):
-    """Reads a .rtf file and returns its content as plain text."""
-    output = pypandoc.convert_file(uploaded_file.name, 'plain', format='rtf')
-    return output
 
 def parse_sections(content):
     """Parses the content into sections based on headings."""
@@ -160,37 +153,4 @@ def export_manual():
     
     export_format = st.radio("Select export format:", ("DOCX", "PDF"))
     
-    if export_format == "DOCX":
-        export_as_docx(st.session_state['manual_content'])
-    elif export_format == "PDF":
-        export_as_pdf(st.session_state['manual_content'])
-
-def export_as_docx(content):
-    """Exports the content as a DOCX file."""
-    doc = Document()
-    for line in content.splitlines():
-        doc.add_paragraph(line)
-    
-    doc_file = "exported_manual.docx"
-    doc.save(doc_file)
-    
-    with open(doc_file, "rb") as f:
-        st.download_button("Download DOCX", f, file_name=doc_file, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-
-def export_as_pdf(content):
-    """Exports the content as a PDF file."""
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-    
-    for line in content.splitlines():
-        pdf.multi_cell(0, 10, line)
-    
-    pdf_file = "exported_manual.pdf"
-    pdf.output(pdf_file)
-    
-    with open(pdf_file, "rb") as f:
-        st.download_button("Download PDF", f, file_name=pdf_file, mime="application/pdf")
-
-if __name__ == "__main__":
-    main()
+    if export_format == "DOCX
