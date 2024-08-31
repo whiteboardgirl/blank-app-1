@@ -1,5 +1,5 @@
 streamlit==1.25.0
-streamlit-quill==0.2.1
+streamlit-quill==0.0.3
 python-docx==0.8.11
 PyPDF2==3.0.1
 pypandoc==1.8.5
