@@ -1,9 +1,7 @@
-streamlit
-SPARQLWrapper
-pandas
-matplotlib
-networkx
-scikit-learn
-plotly
-folium
-streamlit-folium
+streamlit==1.25.0
+streamlit-quill==0.2.1
+python-docx==0.8.11
+PyPDF2==3.0.1
+pypandoc==1.8.5
+fpdf==1.7.2
+
