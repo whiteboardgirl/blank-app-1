@@ -4,7 +4,6 @@ from fpdf import FPDF
 import pypandoc
 import re
 import os
-from streamlit_quill import st_quill
 
 def main():
     st.title("Premier Instruction Manual Viewer and Editor")
@@ -13,7 +12,7 @@ def main():
     section = st.sidebar.selectbox("Select Section", [
         "Introduction", 
         "Upload and View Manual", 
-        "Rich Text Editor", 
+        "Edit Manual", 
         "Search Manual", 
         "Export Manual"
     ])
@@ -22,8 +21,8 @@ def main():
         show_introduction()
     elif section == "Upload and View Manual":
         upload_and_view_manual()
-    elif section == "Rich Text Editor":
-        rich_text_editor()
+    elif section == "Edit Manual":
+        edit_manual()
     elif section == "Search Manual":
         search_manual()
     elif section == "Export Manual":
@@ -108,16 +107,16 @@ def is_heading(line):
     """Determines if a line is a heading."""
     return re.match(r'(Chapter|Section)\s+\d+', line, re.IGNORECASE) or len(line.split()) < 5
 
-def rich_text_editor():
-    st.header("Rich Text Editor")
+def edit_manual():
+    st.header("Edit Manual")
     
     if 'manual_content' not in st.session_state:
         st.error("Please upload and view a manual first.")
         return
     
-    editor_content = st_quill(value=st.session_state['manual_content'], theme="snow")
+    edited_content = st.text_area("Edit the manual content:", st.session_state['manual_content'], height=300)
     if st.button("Save Changes"):
-        st.session_state['manual_content'] = editor_content
+        st.session_state['manual_content'] = edited_content
         st.success("Changes saved.")
 
 def search_manual():
