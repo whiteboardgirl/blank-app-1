@@ -1,5 +1,7 @@
-import streamlit as st
+from flask import Flask, request, render_template, redirect, url_for, send_file
 from io import BytesIO
+
+app = Flask(__name__)
 
 def process_text(text):
     """
@@ -10,31 +12,33 @@ def process_text(text):
     # You can modify this function to suit your needs.
     return text
 
-def main():
-    st.title("MIPPO Manuals Processor")
+@app.route("/", methods=["GET", "POST"])
+def index():
+    if request.method == "POST":
+        # Check if a file is uploaded
+        if "file" not in request.files:
+            return redirect(request.url)
+        file = request.files["file"]
+        if file.filename == "":
+            return redirect(request.url)
+        
+        if file:
+            text = file.read().decode("utf-8")
+            processed_text = process_text(text)
+            
+            # Create a BytesIO stream to hold the processed text for download
+            output = BytesIO()
+            output.write(processed_text.encode("utf-8"))
+            output.seek(0)
+            
+            return send_file(
+                output,
+                as_attachment=True,
+                download_name="processed_manual.txt",
+                mimetype="text/plain"
+            )
 
-    # File uploader
-    uploaded_file = st.file_uploader("Choose a text file", type="txt")
-
-    if uploaded_file is not None:
-        # Read and process the uploaded text file
-        text = uploaded_file.read().decode("utf-8")
-        processed_text = process_text(text)
-
-        # Display the processed text
-        st.text_area("Processed Text", processed_text, height=300)
-
-        # Create a download button for the processed text
-        output = BytesIO()
-        output.write(processed_text.encode("utf-8"))
-        output.seek(0)
-
-        st.download_button(
-            label="Download Processed Text",
-            data=output,
-            file_name="processed_manual.txt",
-            mime="text/plain"
-        )
+    return render_template("index.html")
 
 if __name__ == "__main__":
-    main()
+    app.run(debug=True)
